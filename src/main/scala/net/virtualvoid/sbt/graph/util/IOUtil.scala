@@ -27,6 +27,9 @@ object IOUtil {
   def writeToFile(string: String, file: File): Unit =
     sbt.IO.write(file, string, utf8)
 
+  def appendToFile(string: String, file: File): Unit =
+    sbt.IO.write(file, string, utf8, true)
+
   def saveResource(resourcePath: String, to: File): Unit = {
     val is = getClass.getClassLoader.getResourceAsStream(resourcePath)
     require(is ne null, s"Couldn't load '$resourcePath' from classpath.")
