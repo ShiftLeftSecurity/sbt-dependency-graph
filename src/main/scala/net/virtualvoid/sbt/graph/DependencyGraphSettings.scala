@@ -150,8 +150,8 @@ object DependencyGraphSettings {
       asString in key := renderer(moduleGraph.value),
       printToConsole in key := streams.value.log.info((asString in key).value),
       toFile in key := {
-        val (targetFile, force) = targetFileAndForceParser.parsed
-        writeToFile(key.key.label, (asString in key).value, targetFile, force, streams.value)
+        val (targetFile, force, append) = targetFileAndForceParser.parsed
+        writeToFile(key.key.label, (asString in key).value, targetFile, force, append, streams.value)
       },
       key := (printToConsole in key).value)
 
@@ -200,11 +200,16 @@ object DependencyGraphSettings {
       outFile
     }
 
-  def writeToFile(what: String, data: String, targetFile: File, force: Boolean, streams: TaskStreams): File =
-    if (targetFile.exists && !force)
+  def writeToFile(what: String, data: String, targetFile: File, force: Boolean, append: Boolean, streams: TaskStreams): File =
+    if (force && append)
+      throw new RuntimeException(s"'--force' is not allowed together with '--append'")
+    else if (targetFile.exists && !force && !append)
       throw new RuntimeException(s"Target file for $what already exists at ${targetFile.getAbsolutePath}. Use '-f' to override")
     else {
-      IOUtil.writeToFile(data, targetFile)
+      if (append)
+        IOUtil.appendToFile(if (targetFile.exists) sbt.IO.Newline + data else data, targetFile)
+      else
+        IOUtil.writeToFile(data, targetFile)
 
       streams.log.info(s"Wrote $what to '$targetFile'")
       targetFile
@@ -254,8 +259,10 @@ object DependencyGraphSettings {
     }
   val shouldForceParser: Parser[Boolean] = (Space ~> (Parser.literal("-f") | "--force")).?.map(_.isDefined)
 
-  val targetFileAndForceParser: Parser[(File, Boolean)] =
-    Parsers.fileParser(new File(".")) ~ shouldForceParser
+  val shouldAppendParser: Parser[Boolean] = (Space ~> (Parser.literal("-a") | "--append")).?.map(_.isDefined)
+
+  val targetFileAndForceParser: Parser[(File, Boolean, Boolean)] =
+    (Parsers.fileParser(new File(".")) ~ shouldForceParser ~ shouldAppendParser).map { case ((file, f), a) ⇒ (file, f, a) }
 
   // This is to support 0.13.8's InlineConfigurationWithExcludes while not forcing 0.13.8
   type HasModule = {
